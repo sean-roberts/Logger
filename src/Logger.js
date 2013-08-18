@@ -9,14 +9,19 @@
      */
     _comTypeSet = true, 
     
+    _buffer,
+    
     _console = console || {}, 
     
     _log, 
 
     /* settings for posting logs to listeners */
     _settings = {
+        /* user given */
         processorUrl: '',
         listenerUrl: '',
+        
+        /* buffer limit needs to be greater than 0 */
         bufferLimit: 5
     }, 
     
@@ -26,6 +31,8 @@
             _setupConsole();
             _setupComplete = true;
         }
+        
+        _buffer = new Buffer();
     },
     
     
@@ -69,38 +76,51 @@
     
     /* contentWindow.postMessage api to communicate with a listner who then communicates with the processor*/
     PostMessageComm = function(){
+        
     	var iframe = document.createElement('iframe');
 			iframe.src = _settings.listenerUrl;
+			/* we will have the contentWindow after load happens so make it go back through the cycle onload triggered */
 			iframe.onload = _buffer.flush;
 			iframe.style.height = '100px';
 			document.body.appendChild(iframe);
 			listener = iframe.contentWindow;
 		
     	return {
-    		send : function(data){
-    			listener.postMessage(data, listenerOrigin);
+    		send : function(buffer){
+    		    /* nothing gets removed from the buffer or sent if the contentWindow is available */
+    		   debugger;
+    		    if(listener){
+    		        while(buffer.length > 0){
+    		            listener.postMessage(JSON.stringify({ "logs" : buffer.shift()}), listenerOrigin);
+    		        }
+    		    }
     		}
 		};
-    	
     },
     
     /* compare the domains and give a Comm object that is best suited */
     CommFactory = function(){
-    	var location = window.location,
-        	loggerHost = location.host,
-        	processorHost = _settings.processorUrl.split('/')[2],
-        	listenerOriginPaths = _settings.listenerUrl.split('/'),
-        	listenerOrigin = listenerOriginPaths[0] + '://' + listenerOriginPaths[2],
-        	listener;
-        	
-        /* check to see if this host is the same as the processor host */
-        if(loggerHost !== processorHost){
-        	/* communicate with processor via postMessage if the two domains are different */
-        	return new PostMessageComm();
-        }else{
-        	/* since domains are the same we can assume that ajax posts are allowed*/
-        	return new XHRComm();
-        }
+        
+        var location = window.location,
+            loggerHost = location.host,
+            processorHost = _settings.processorUrl.split('/')[2],
+            listenerOriginPaths = _settings.listenerUrl.split('/'),
+            listenerOrigin = listenerOriginPaths[0] + '://' + listenerOriginPaths[2],
+            listener;
+        
+        return {
+            create : function(){
+                
+                /* check to see if this host is the same as the processor host */
+                if(loggerHost !== processorHost){
+                    /* communicate with processor via postMessage if the two domains are different */
+                    return new PostMessageComm();
+                }else{
+                    /* since domains are the same we can assume that ajax posts are allowed*/
+                    return new XHRComm();
+                }
+            }
+        };
     },
     
     
@@ -113,7 +133,7 @@
 	
     /* override the console functions with the posting to listener logic */
     _setupConsole = function() {
-        
+               
         var LogItem = function(type, time, data){
             this.type = type;
             this.time = time;
@@ -140,11 +160,29 @@
         }
 
     /* TODO: setup debug, asset, etc. other console functions */
-    }, 
+    },
     
+    /* set up processor communications */
+    Communications = function() {
+    	
+        var comm;
+        
+        /* we need to reevaluate the communications if the settings change */
+        if (!_comTypeSet) {
+			var factory = new CommFactory();
+			comm = factory.create();
+            _comTypeSet = true;
+        }
+        return {
+            send: function(buffer) {
+                comm.send(buffer);
+            }
+        };
+    
+    },
     
     /* buffer the transmissions as to keep the network traffic cleared and performance up */
-    _buffer = (function() {
+    Buffer = function() {
         
         var buffs = [[]];
         
@@ -153,39 +191,27 @@
             add: function(item) {
                 var lastIndex = buffs.length - 1;
                 
-                if (buffs[lastIndex].length < _settings.bufferLimit) {
+                /* send flush the buffer if we reach the limit */
+                if (buffs[lastIndex].length < _settings.bufferLimit - 1) {
                     buffs[lastIndex].push(item);
                 } else {
-                    buffs.push([item]);
+                    buffs[lastIndex].push(item);
+                    
                     _buffer.flush();
+                    
+                    /* add an empty array to keep buffer going */
+                    buffs.push([]);
                 }
             },
 
             /* flush will send the data to the processor */
             flush: function() {
-                var data = buffs.shift();
-                _coms.send(data);
+                debugger;
+                var Comms = new Communications();
+                Coms.send(buffs);
             }
         }
-    }()),
-    
-    
-    /* set up processor communications */
-    _coms = (function() {
-    	
-        var Comm;
-        
-        if (!_comTypeSet) {
-			Comm = new CommFactory();
-            _comTypeSet = true;
-        }
-        return {
-            send: function(data) {
-                Comm.send(JSON.stringify({ "logs" : data}));
-            }
-        };
-    
-    }());
+    };
 
 
     /**
@@ -199,11 +225,18 @@
         settings: function(options) {
             
             if (options) {
-                _settings.processorUrl = options.processorUrl || _settings.processorUrl;
-                _settings.listenerUrl = options.listenerUrl || _settings.listenerUrl;
                 
-                /* since the options have changed we need to flag that our communication method needs to be rechecked */
-                _comTypeSet = false;
+                /* we need to reevaluate the comms if urls change */
+                if(options.processorUrl || options.listenerUrl){
+                    _settings.processorUrl = options.processorUrl || _settings.processorUrl;
+                    _settings.listenerUrl = options.listenerUrl || _settings.listenerUrl;
+                        
+                    _comTypeSet = false;
+                }
+                
+                /* make sure we have at least a buffer limit of one */
+                var bufferLimit = options.bufferLimit || _settings.bufferLimit;
+                _settings.bufferLimit = bufferLimit <= 0 ? 1 : bufferLimit;
             }
             
             return _settings;
