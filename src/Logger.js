@@ -9,7 +9,14 @@
      */
     _comTypeSet = true, 
     
+    /* is the iframe ready to communicate via postMessage comm */
+    _listenerReady = false,
+    
+    /* the logs buffer */
     _buffer,
+    
+    /* the set communications, this is reevaluated after changing any urls */
+    _comms,
     
     _console = console || {}, 
     
@@ -75,23 +82,28 @@
     },
     
     /* contentWindow.postMessage api to communicate with a listner who then communicates with the processor*/
-    PostMessageComm = function(){
+    PostMessageComm = function(listenerOrigin){
         
     	var iframe = document.createElement('iframe');
 			iframe.src = _settings.listenerUrl;
 			/* we will have the contentWindow after load happens so make it go back through the cycle onload triggered */
-			iframe.onload = _buffer.flush;
+			iframe.onload = _listenerLoaded;
 			iframe.style.height = '100px';
 			document.body.appendChild(iframe);
-			listener = iframe.contentWindow;
+			
+		var listener = iframe.contentWindow;
 		
     	return {
     		send : function(buffer){
     		    /* nothing gets removed from the buffer or sent if the contentWindow is available */
     		   debugger;
-    		    if(listener){
+    		    var data;
+    		    if(listener && _listenerReady){
     		        while(buffer.length > 0){
-    		            listener.postMessage(JSON.stringify({ "logs" : buffer.shift()}), listenerOrigin);
+    		        	data = buffer.shift();
+    		        	if(data.length > 0){
+    		        		listener.postMessage(JSON.stringify({ "logs" : data}), listenerOrigin);
+    		        	}
     		        }
     		    }
     		}
@@ -105,16 +117,14 @@
             loggerHost = location.host,
             processorHost = _settings.processorUrl.split('/')[2],
             listenerOriginPaths = _settings.listenerUrl.split('/'),
-            listenerOrigin = listenerOriginPaths[0] + '://' + listenerOriginPaths[2],
-            listener;
+            listenerOrigin = listenerOriginPaths[0] + '//' + listenerOriginPaths[2];
         
         return {
             create : function(){
-                
                 /* check to see if this host is the same as the processor host */
                 if(loggerHost !== processorHost){
                     /* communicate with processor via postMessage if the two domains are different */
-                    return new PostMessageComm();
+                    return new PostMessageComm(listenerOrigin);
                 }else{
                     /* since domains are the same we can assume that ajax posts are allowed*/
                     return new XHRComm();
@@ -123,6 +133,10 @@
         };
     },
     
+    _listenerLoaded = function(){
+    	_listenerReady = true;
+    	_buffer.flush();
+    },
     
     /* logging the time the log was made - as opposed to logging when the server got it */
     _time = function() {
@@ -189,6 +203,12 @@
         return {
             
             add: function(item) {
+            	
+            	/* make sure we have a buffer array after the flush happens*/
+            	if(buffs.length === 0){
+            		buffs.push([]);
+            	}
+            	
                 var lastIndex = buffs.length - 1;
                 
                 /* send flush the buffer if we reach the limit */
@@ -206,9 +226,11 @@
 
             /* flush will send the data to the processor */
             flush: function() {
-                debugger;
-                var Comms = new Communications();
-                Coms.send(buffs);
+                /* we shouldnt need to set up comms until we start logging */
+                if(!_comms || !_comTypeSet){
+                	_comms = new Communications();	
+                }
+                _comms.send(buffs);
             }
         }
     };
@@ -229,6 +251,7 @@
                 /* we need to reevaluate the comms if urls change */
                 if(options.processorUrl || options.listenerUrl){
                     _settings.processorUrl = options.processorUrl || _settings.processorUrl;
+                    
                     _settings.listenerUrl = options.listenerUrl || _settings.listenerUrl;
                         
                     _comTypeSet = false;
