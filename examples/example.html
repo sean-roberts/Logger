@@ -16,10 +16,22 @@
         <script src="../src/Logger.js"></script>
         
         <script>
+        
+            //setup my Logger files
+            var mySettings = {
+                processorUrl: 'http://sean-roberts.com/logger/processor/processor.php',
+                proxyUrl: 'http://sean-roberts.com/logger/processor/logger_proxy.php'
+            };
+            Logger.settings(mySettings);
             
-            console.log('Hello, world!');
             
+            function log(n){
+                for(i = 0; i < n; i++){
+                    console.log(i);
+                }
+            }
             
+            log(5);
             
         </script>
         
