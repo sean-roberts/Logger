@@ -4,8 +4,10 @@
     /* is the logging setup ready */
     var _setupComplete = false, 
 
-    /* has the type of communication been set */
-    _comTypeSet = false, 
+    /* has the type of communication been set 
+     * set to false  whenever the urls in settings are changed
+     */
+    _comTypeSet = true, 
     
     _console = console || {}, 
     
@@ -14,26 +16,101 @@
     /* settings for posting logs to listeners */
     _settings = {
         processorUrl: '',
-        proxyUrl: '',
+        listenerUrl: '',
         bufferLimit: 5
     }, 
     
+    /* set the environment up, override the console methods, etc. */
     _init = function() {
         if (!_setupComplete) {
-            
             _setupConsole();
-            
             _setupComplete = true;
         }
-    }, 
-    _postUrl = function(){
-        return _settings.processorUrl;
     },
+    
+    
+    /* ajax request directly to the processor api */
+    XHRComm = function(){
+    	
+    	var xhr;
+        try {
+            xhr = new ActiveXObject("Msxml2.XMLHTTP");
+        } catch (e) {
+            try {
+                xhr = new ActiveXObject("Microsoft.XMLHTTP");
+            } catch (e) {
+                try {
+                    xhr = new XMLHttpRequest();
+                } catch (e) {
+                    xhr = false;
+                }
+            }
+        }
+    	
+    	return {
+    		
+    		send : function(data){
+                /* if we can't make a request lets just take our ball and go home */
+                if (!xhr) {
+                    return false;
+                };
+                try {
+                    xhr.open("POST", _settings.processorUrl, true);
+                    xhr.setRequestHeader("Method", "POST " + _settings.processorUrl + " HTTP/1.1");
+                    xhr.setRequestHeader("Content-Type", "application/json");
+                    xhr.send(data);
+                } catch(er) {
+                    return false;
+                }
+                return true;
+    		}
+    	}
+    },
+    
+    /* contentWindow.postMessage api to communicate with a listner who then communicates with the processor*/
+    PostMessageComm = function(){
+    	var iframe = document.createElement('iframe');
+			iframe.src = _settings.listenerUrl;
+			iframe.onload = _buffer.flush;
+			iframe.style.height = '100px';
+			document.body.appendChild(iframe);
+			listener = iframe.contentWindow;
+		
+    	return {
+    		send : function(data){
+    			listener.postMessage(data, listenerOrigin);
+    		}
+		};
+    	
+    },
+    
+    /* compare the domains and give a Comm object that is best suited */
+    CommFactory = function(){
+    	var location = window.location,
+        	loggerHost = location.host,
+        	processorHost = _settings.processorUrl.split('/')[2],
+        	listenerOriginPaths = _settings.listenerUrl.split('/'),
+        	listenerOrigin = listenerOriginPaths[0] + '://' + listenerOriginPaths[2],
+        	listener;
+        	
+        /* check to see if this host is the same as the processor host */
+        if(loggerHost !== processorHost){
+        	/* communicate with processor via postMessage if the two domains are different */
+        	return new PostMessageComm();
+        }else{
+        	/* since domains are the same we can assume that ajax posts are allowed*/
+        	return new XHRComm();
+        }
+    },
+    
+    
+    /* logging the time the log was made - as opposed to logging when the server got it */
     _time = function() {
         var date = new Date();
         return date.toUTCString();
     },
-
+	
+	
     /* override the console functions with the posting to listener logic */
     _setupConsole = function() {
         
@@ -65,6 +142,8 @@
     /* TODO: setup debug, asset, etc. other console functions */
     }, 
     
+    
+    /* buffer the transmissions as to keep the network traffic cleared and performance up */
     _buffer = (function() {
         
         var buffs = [[]];
@@ -87,65 +166,22 @@
                 var data = buffs.shift();
                 _coms.send(data);
             }
-        
         }
+    }()),
     
-    }()), 
     
+    /* set up processor communications */
     _coms = (function() {
-
-        /* TODO: it may be beneficial to use a Factory here  */
-        var _send;
+    	
+        var Comm;
         
         if (!_comTypeSet) {
-
-            /* TODO: handle allowing cross site logging with postMessage api */
-           
-            var xhr;
-            try {
-                xhr = new ActiveXObject("Msxml2.XMLHTTP");
-            } catch (e) {
-                try {
-                    xhr = new ActiveXObject("Microsoft.XMLHTTP");
-                } catch (e) {
-                    try {
-                        xhr = new XMLHttpRequest();
-                    } catch (e) {
-                        xhr = false;
-                    }
-                }
-            }
-            
-            /* this function accesses the processor api directly */
-                           
-            _send = function(data) {
-
-                /* if we can't make a request lets just take our ball and go home */
-                if (!xhr) {
-                    return false;
-                };
-
-                try {
-                    
-                    xhr.open("POST", _postUrl(), true);
-                    xhr.setRequestHeader("Method", "POST " + _postUrl() + " HTTP/1.1");
-                    xhr.setRequestHeader("Content-Type", "application/json");
-                    xhr.send(data);
-                    
-                } catch(er) {
-                    return false;
-                }
-
-                return true;
-            };
-            
+			Comm = new CommFactory();
             _comTypeSet = true;
         }
-        
-        
         return {
             send: function(data) {
-                _send(JSON.stringify({ "logs" : data}));
+                Comm.send(JSON.stringify({ "logs" : data}));
             }
         };
     
@@ -164,7 +200,7 @@
             
             if (options) {
                 _settings.processorUrl = options.processorUrl || _settings.processorUrl;
-                _settings.proxyUrl = options.proxyUrl || _settings.proxyUrl;
+                _settings.listenerUrl = options.listenerUrl || _settings.listenerUrl;
                 
                 /* since the options have changed we need to flag that our communication method needs to be rechecked */
                 _comTypeSet = false;
