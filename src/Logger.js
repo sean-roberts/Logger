@@ -5,9 +5,8 @@
     var _setupComplete = false, 
 
     /* has the type of communication been set 
-     * set to false  whenever the urls in settings are changed
-     */
-    _comTypeSet = true, 
+     * set to false  whenever the urls in settings are changed */
+     _comTypeSet = true, 
     
     /* is the iframe ready to communicate via postMessage comm */
     _listenerReady = false,
@@ -47,35 +46,44 @@
     XHRComm = function(){
     	
     	var xhr;
-        try {
-            xhr = new ActiveXObject("Msxml2.XMLHTTP");
-        } catch (e) {
-            try {
-                xhr = new ActiveXObject("Microsoft.XMLHTTP");
-            } catch (e) {
-                try {
-                    xhr = new XMLHttpRequest();
-                } catch (e) {
-                    xhr = false;
-                }
-            }
-        }
+        if(XMLHttpRequest in window){
+			xhr = new XMLHttpRequest();
+		}else{
+			try {
+				xhr = new ActiveXObject("Msxml2.XMLHTTP");
+			} catch (e) {
+				try {
+					xhr = new ActiveXObject("Microsoft.XMLHTTP");
+				} catch (e) {
+					xhr = false;
+				}
+			}
+		}
     	
     	return {
     		
-    		send : function(data){
+    		send : function(buffer){
                 /* if we can't make a request lets just take our ball and go home */
                 if (!xhr) {
                     return false;
                 };
-                try {
-                    xhr.open("POST", _settings.processorUrl, true);
-                    xhr.setRequestHeader("Method", "POST " + _settings.processorUrl + " HTTP/1.1");
-                    xhr.setRequestHeader("Content-Type", "application/json");
-                    xhr.send(data);
-                } catch(er) {
-                    return false;
-                }
+                var data;
+                
+                while(buffer.length > 0){
+		        	
+		        	data = buffer.shift();
+		        	
+		        	if(data.length > 0){
+		        		try {
+		                    xhr.open("POST", _settings.processorUrl, true);
+		                    xhr.setRequestHeader("Method", "POST " + _settings.processorUrl + " HTTP/1.1");
+		                    xhr.setRequestHeader("Content-Type", "application/json");
+		                    xhr.send(data);
+		                } catch(er) {
+		                    return false;
+		                }
+		        	}
+		        }
                 return true;
     		}
     	}
@@ -96,13 +104,15 @@
     	return {
     		send : function(buffer){
     		    /* nothing gets removed from the buffer or sent if the contentWindow is available */
-    		   debugger;
+    		   
     		    var data;
     		    if(listener && _listenerReady){
     		        while(buffer.length > 0){
     		        	data = buffer.shift();
     		        	if(data.length > 0){
-    		        		listener.postMessage(JSON.stringify({ "logs" : data}), listenerOrigin);
+    		        		/* if the Logger and processor are on 2 different domains, the domains should be absolute, 
+    		        		 * making it safe to assume we can pass that to the listener */
+    		        		listener.postMessage(JSON.stringify({ "logs" : data, "processorUrl" : _settings.processorUrl}), listenerOrigin);
     		        	}
     		        }
     		    }
