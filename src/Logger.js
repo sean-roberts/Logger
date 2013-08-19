@@ -1,6 +1,15 @@
-;(function(window) {
-    'use strict';
 
+/**
+ * @Author: Sean Roberts (sean-roberts.com | @DevelopSean)
+ * @Date: 8/19/2013
+ * @Summary: Logger.js is a centralized framework to override the default console.log method 
+ * 			(soon to be all console methods) to not only write to the web console, but to then send 
+ * 			the logs to the Processor.php endpoint which will then parse and write the log to the specified 
+ * 			log file location.
+ */
+
+;(function() {
+    'use strict';
     
     var _docReady = false,
     
@@ -12,7 +21,7 @@
 
     /* has the type of communication been set 
      * set to false  whenever the urls in settings are changed */
-     _comTypeSet = true, 
+    _comTypeSet = true, 
     
     /* is the iframe ready to communicate via postMessage comm */
     _listenerReady = false,
@@ -34,11 +43,28 @@
         listenerUrl: '',
         
         /* buffer limit needs to be greater than 0 */
-        bufferLimit: 5
+        bufferLimit: 50
     }, 
     
     /* set the environment up, override the console methods, etc. */
     _init = function() {
+    	
+    	/* set up initial event to flush the buffer */
+	    if (document.readyState === "complete") { 
+	        /* signify the window has been loaded even though we can't capture preceding logs */
+	        _windowLoaded(); 
+	    }else{
+	        /* add event listener to flush buffer when the document loads */
+	        
+	        if (window.addEventListener) {
+	            window.addEventListener("load", _windowLoaded, false);
+	        } else if (window.attachEvent) {
+	            window.attachEvent("onload", _windowLoaded);
+	        } else {
+	            document.addEventListener("load",  _windowLoaded, false);
+	        }
+	    }
+    	
         if (!_setupComplete) {
             _setupConsole();
             _setupComplete = true;
@@ -74,7 +100,6 @@
                     return false;
                 };
                 var data;
-                debugger;
                 while(buffer.length > 0){
                     
                     data = buffer.shift();
@@ -99,18 +124,21 @@
     PostMessageComm = function(listenerOrigin){
         
         var iframe = document.createElement('iframe');
-            iframe.src = _settings.listenerUrl;
-            /* we will have the contentWindow after load happens so make it go back through the cycle onload triggered */
-            iframe.onload = _listenerLoaded;
-            iframe.style.height = '100px';
-            document.body.appendChild(iframe);
+        iframe.src = _settings.listenerUrl;
+        /* we will have the contentWindow after load happens so make it go back through the cycle onload triggered */
+        iframe.onload = _listenerLoaded;
+        iframe.style.height = '0';
+        iframe.style.width = '0';
+        iframe.style.display = 'none';
+        
+        document.body.appendChild(iframe);
             
         var listener = iframe.contentWindow;
         
         return {
             send : function(buffer){
+            	
                 /* nothing gets removed from the buffer or sent if the contentWindow is available */
-               
                 var data;
                 if(listener && _listenerReady){
                     while(buffer.length > 0){
@@ -128,7 +156,6 @@
     
     /* compare the domains and give a Comm object that is best suited */
     CommFactory = function(){
-        debugger;
         var location = window.location,
             loggerHost = location.host,
             processorHost = _settings.processorUrl.split('/')[2],
@@ -156,7 +183,7 @@
     
     _windowLoaded = function(){
         _docReady = true;
-        _buffer.flush;
+    	_buffer.flush();
     },
     
     /* logging the time the log was made - as opposed to logging when the server got it */
@@ -192,9 +219,9 @@
             }
             
             _buffer.add(new LogItem('log', _time(), toLog.join(', ')));
-        }
+        };
 
-    /* TODO: setup debug, asset, etc. other console functions */
+    	/* TODO: setup debug, asset, etc. other console functions */
     },
     
     /* set up processor communications */
@@ -224,7 +251,7 @@
         return {
             
             add: function(item) {
-                
+            	
                 /* make sure we have a buffer array after the flush happens*/
                 if(buffs.length === 0){
                     buffs.push([]);
@@ -238,23 +265,25 @@
                 } else {
                     buffs[lastIndex].push(item);
                     
-                    /* timing for post backs 
-                     * we have an event handler for when the dom content loads, we will flush the buffer
-                     * after that, we will set a second interval if something is added to the buffer before we flush*/
-                    if(_docReady && typeof _flushTimer !== "number"){
-                        _flushTimer = window.setTimeout(_buffer.flush, 1000);
-                    }
-                    
                     /* add an empty array to keep buffer going */
                     buffs.push([]);
                 }
+                
+                /* timing for post backs 
+                 * we have an event handler for when the dom content loads, we will flush the buffer
+                 * after that, we will set a second interval if something is added to the buffer before we flush*/
+                if(_docReady && typeof _flushTimer !== "number"){
+                    _flushTimer = window.setTimeout(_buffer.flush, 1000);
+                }
+                
             },
 
             /* flush will send the data to the processor */
             flush: function() {
                 
-                if(_flushTimer){
-                    window.clearTimeout(_flushTimer);
+        		/* especially for postMessage comm, dont start sending data unless you need to*/
+                if(buffs.length > 0 && buffs[0].length === 0){
+                	return;
                 }
                 
                 /* we shouldnt need to set up comms until we start logging */
@@ -262,6 +291,12 @@
                     _comms = new Communications();  
                 }
                 _comms.send(buffs);
+                
+                /* reset the timer */
+                if(_flushTimer){
+                    window.clearTimeout(_flushTimer);
+                    _flushTimer = null;
+                }
             }
         }
     };
@@ -272,26 +307,7 @@
     */
     _init();
     
-    
-    
-    /* set up initial event to flush the buffer */
-    if (document.readyState === "complete") { 
-        /* signify the window has been loaded even though we can't capture preceding logs */
-        _windowLoaded(); 
-    }else{
-        /* add event listener to flush buffer when the document loads */
-        if (window.addEventListener) {
-            window.addEventListener("load", _windowLoaded, false);
-        } else if (window.attachEvent) {
-            window.attachEvent("onload", _windowLoaded);
-        } else {
-            document.addEventListener("load",  _windowLoaded }, false);
-        }
-    }
 
-
-
-    /* Logger object is to allow setting of settings and commands */
     window.Logger = {
         settings: function(options) {
             if (options) {
@@ -320,4 +336,4 @@
         }
     };
 
-})(window);
+})();

@@ -13,27 +13,26 @@
     </head>
     <body>
         
+        <!-- Point to your Logger.js file on your server -->
         <script src="../src/Logger.js"></script>
         
         <script>
         
-            //setup my Logger files
+            /* setup my Logger files */
             var mySettings = {
-                processorUrl: 'http://sean-roberts.com/logger/processor/processor.php',
-                listenerUrl: 'http://sean-roberts.com/logger/processor/listener.php'
+            	/* note when replacing text below with your urls, the brackets should also be removed*/
+                processorUrl: '{absolute url of the processor.php}',
+                listenerUrl: '{absolute url of listener.php}'
             };
+            
             Logger.settings(mySettings);
             
-            
-            function log(n){
-                for(i = 0; i < n; i++){
-                    console.log(i);
-                }
-            }
-            
-            //log(5);
-            
+            console.log('Welcome to centralized logging');
         </script>
+        
+        <i>Check your log file location.. defined in Processor.php</i>
+        
+        
         
     </body>
 </html>
