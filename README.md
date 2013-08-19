@@ -14,7 +14,7 @@ It's safe to say this is geared towards the testing / development part of the so
 A little setup needed..
 --------
 
-We need to do a little set up first, add the processor.php file and listener.php files onto your web server. Then, the Logger.js file will need to go on any page you wish to use these features with but it doesn't have to be the same domain as your server.
+We need to do a little set up first, add the processor.php file and listener.php files onto your web server. Then, the Logger.js file will need to go on any page you wish to use these features with but it doesn't have to be the same domain as your server. Then pass the processorUrl and the listenerUrl to the Logger.settings(); (see example.html) so logger knows where to send the data.
 
 In the processor.php file you will need identify the file location and turn the $loggingTurnedOn flag on when you are ready to accept logs. 
 
@@ -26,5 +26,6 @@ How does it work?
 
 The idea is to override the console.log method to post the logs back to the processor.php. Which, in turn, will post to the specified log file. To help with perfomance, we send the buffered array of logs in groups at different points of the page cycle: the first group goes on window.load and the proceding logs will be set 1 second after a log was made and that pattern repeats each time a log is made.
 
+Note: you don't have to do anything new syntatically, this solution just adds more functionality to the console.log method you are already using.
 
 If you have any ideas for making this better please let me know or fork it and show me. Thanks guys!
