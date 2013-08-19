@@ -25,7 +25,7 @@
 
 			function sendToProcessor(processorUrl, data) {
 				var xhr;
-				if(XMLHttpRequest in window){
+				if(XMLHttpRequest){
 					xhr = new XMLHttpRequest();
 				}else{
 					try {

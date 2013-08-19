@@ -1,8 +1,14 @@
-;(function() {
+;(function(window) {
     'use strict';
 
+    
+    var _docReady = false,
+    
+    /* id for the setTimeout to flush the buffer */
+    _flushTimer,
+    
     /* is the logging setup ready */
-    var _setupComplete = false, 
+    _setupComplete = false, 
 
     /* has the type of communication been set 
      * set to false  whenever the urls in settings are changed */
@@ -44,85 +50,85 @@
     
     /* ajax request directly to the processor api */
     XHRComm = function(){
-    	
-    	var xhr;
-        if(XMLHttpRequest in window){
-			xhr = new XMLHttpRequest();
-		}else{
-			try {
-				xhr = new ActiveXObject("Msxml2.XMLHTTP");
-			} catch (e) {
-				try {
-					xhr = new ActiveXObject("Microsoft.XMLHTTP");
-				} catch (e) {
-					xhr = false;
-				}
-			}
-		}
-    	
-    	return {
-    		
-    		send : function(buffer){
+        
+        var xhr;
+        if(XMLHttpRequest){
+            xhr = new XMLHttpRequest();
+        }else{
+            try {
+                xhr = new ActiveXObject("Msxml2.XMLHTTP");
+            } catch (e) {
+                try {
+                    xhr = new ActiveXObject("Microsoft.XMLHTTP");
+                } catch (e) {
+                    xhr = false;
+                }
+            }
+        }
+        
+        return {
+            
+            send : function(buffer){
                 /* if we can't make a request lets just take our ball and go home */
                 if (!xhr) {
                     return false;
                 };
                 var data;
-                
+                debugger;
                 while(buffer.length > 0){
-		        	
-		        	data = buffer.shift();
-		        	
-		        	if(data.length > 0){
-		        		try {
-		                    xhr.open("POST", _settings.processorUrl, true);
-		                    xhr.setRequestHeader("Method", "POST " + _settings.processorUrl + " HTTP/1.1");
-		                    xhr.setRequestHeader("Content-Type", "application/json");
-		                    xhr.send(data);
-		                } catch(er) {
-		                    return false;
-		                }
-		        	}
-		        }
+                    
+                    data = buffer.shift();
+                    
+                    if(data.length > 0){
+                        try {
+                            xhr.open("POST", _settings.processorUrl, true);
+                            xhr.setRequestHeader("Method", "POST " + _settings.processorUrl + " HTTP/1.1");
+                            xhr.setRequestHeader("Content-Type", "application/json");
+                            xhr.send(JSON.stringify({ "logs" : data }));
+                        } catch(er) {
+                            return false;
+                        }
+                    }
+                }
                 return true;
-    		}
-    	}
+            }
+        }
     },
     
     /* contentWindow.postMessage api to communicate with a listner who then communicates with the processor*/
     PostMessageComm = function(listenerOrigin){
         
-    	var iframe = document.createElement('iframe');
-			iframe.src = _settings.listenerUrl;
-			/* we will have the contentWindow after load happens so make it go back through the cycle onload triggered */
-			iframe.onload = _listenerLoaded;
-			iframe.style.height = '100px';
-			document.body.appendChild(iframe);
-			
-		var listener = iframe.contentWindow;
-		
-    	return {
-    		send : function(buffer){
-    		    /* nothing gets removed from the buffer or sent if the contentWindow is available */
-    		   
-    		    var data;
-    		    if(listener && _listenerReady){
-    		        while(buffer.length > 0){
-    		        	data = buffer.shift();
-    		        	if(data.length > 0){
-    		        		/* if the Logger and processor are on 2 different domains, the domains should be absolute, 
-    		        		 * making it safe to assume we can pass that to the listener */
-    		        		listener.postMessage(JSON.stringify({ "logs" : data, "processorUrl" : _settings.processorUrl}), listenerOrigin);
-    		        	}
-    		        }
-    		    }
-    		}
-		};
+        var iframe = document.createElement('iframe');
+            iframe.src = _settings.listenerUrl;
+            /* we will have the contentWindow after load happens so make it go back through the cycle onload triggered */
+            iframe.onload = _listenerLoaded;
+            iframe.style.height = '100px';
+            document.body.appendChild(iframe);
+            
+        var listener = iframe.contentWindow;
+        
+        return {
+            send : function(buffer){
+                /* nothing gets removed from the buffer or sent if the contentWindow is available */
+               
+                var data;
+                if(listener && _listenerReady){
+                    while(buffer.length > 0){
+                        data = buffer.shift();
+                        if(data.length > 0){
+                            /* if the Logger and processor are on 2 different domains, the domains should be absolute, 
+                             * making it safe to assume we can pass that to the listener */
+                            listener.postMessage(JSON.stringify({ "logs" : data, "processorUrl" : _settings.processorUrl}), listenerOrigin);
+                        }
+                    }
+                }
+            }
+        };
     },
     
     /* compare the domains and give a Comm object that is best suited */
     CommFactory = function(){
-        
+        debugger;
         var location = window.location,
             loggerHost = location.host,
             processorHost = _settings.processorUrl.split('/')[2],
@@ -144,8 +150,13 @@
     },
     
     _listenerLoaded = function(){
-    	_listenerReady = true;
-    	_buffer.flush();
+        _listenerReady = true;
+        _buffer.flush();
+    },
+    
+    _windowLoaded = function(){
+        _docReady = true;
+        _buffer.flush;
     },
     
     /* logging the time the log was made - as opposed to logging when the server got it */
@@ -153,8 +164,8 @@
         var date = new Date();
         return date.toUTCString();
     },
-	
-	
+    
+    
     /* override the console functions with the posting to listener logic */
     _setupConsole = function() {
                
@@ -188,13 +199,13 @@
     
     /* set up processor communications */
     Communications = function() {
-    	
+        
         var comm;
         
         /* we need to reevaluate the communications if the settings change */
         if (!_comTypeSet) {
-			var factory = new CommFactory();
-			comm = factory.create();
+            var factory = new CommFactory();
+            comm = factory.create();
             _comTypeSet = true;
         }
         return {
@@ -213,12 +224,12 @@
         return {
             
             add: function(item) {
-            	
-            	/* make sure we have a buffer array after the flush happens*/
-            	if(buffs.length === 0){
-            		buffs.push([]);
-            	}
-            	
+                
+                /* make sure we have a buffer array after the flush happens*/
+                if(buffs.length === 0){
+                    buffs.push([]);
+                }
+                
                 var lastIndex = buffs.length - 1;
                 
                 /* send flush the buffer if we reach the limit */
@@ -227,7 +238,12 @@
                 } else {
                     buffs[lastIndex].push(item);
                     
-                    _buffer.flush();
+                    /* timing for post backs 
+                     * we have an event handler for when the dom content loads, we will flush the buffer
+                     * after that, we will set a second interval if something is added to the buffer before we flush*/
+                    if(_docReady && typeof _flushTimer !== "number"){
+                        _flushTimer = window.setTimeout(_buffer.flush, 1000);
+                    }
                     
                     /* add an empty array to keep buffer going */
                     buffs.push([]);
@@ -236,9 +252,14 @@
 
             /* flush will send the data to the processor */
             flush: function() {
+                
+                if(_flushTimer){
+                    window.clearTimeout(_flushTimer);
+                }
+                
                 /* we shouldnt need to set up comms until we start logging */
                 if(!_comms || !_comTypeSet){
-                	_comms = new Communications();	
+                    _comms = new Communications();  
                 }
                 _comms.send(buffs);
             }
@@ -252,16 +273,32 @@
     _init();
     
     
+    
+    /* set up initial event to flush the buffer */
+    if (document.readyState === "complete") { 
+        /* signify the window has been loaded even though we can't capture preceding logs */
+        _windowLoaded(); 
+    }else{
+        /* add event listener to flush buffer when the document loads */
+        if (window.addEventListener) {
+            window.addEventListener("load", _windowLoaded, false);
+        } else if (window.attachEvent) {
+            window.attachEvent("onload", _windowLoaded);
+        } else {
+            document.addEventListener("load",  _windowLoaded }, false);
+        }
+    }
+
+
+
+    /* Logger object is to allow setting of settings and commands */
     window.Logger = {
-        
         settings: function(options) {
-            
             if (options) {
                 
                 /* we need to reevaluate the comms if urls change */
                 if(options.processorUrl || options.listenerUrl){
                     _settings.processorUrl = options.processorUrl || _settings.processorUrl;
-                    
                     _settings.listenerUrl = options.listenerUrl || _settings.listenerUrl;
                         
                     _comTypeSet = false;
@@ -272,9 +309,15 @@
                 _settings.bufferLimit = bufferLimit <= 0 ? 1 : bufferLimit;
             }
             
-            return _settings;
+            /* return an immutable set of setting values 
+             * so the only way to change settings is through the constructor
+             * this will allow us to keep track of the changes taking place */
+            return {
+                processorUrl : _settings.processorUrl.toString(),
+                listenerUrl : _settings.listenerUrl.toString(),
+                bufferLimit : _settings.bufferLimit.toString()
+            };
         }
-    
     };
 
-})();
+})(window);
