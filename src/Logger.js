@@ -26,6 +26,10 @@
     /* is the iframe ready to communicate via postMessage comm */
     _listenerReady = false,
     
+    /* the session name as defined by user but used by server to 
+     * allow logging for multiple users to a single listener */
+    _sessions = [],
+    
     /* the logs buffer */
     _buffer,
     
@@ -109,7 +113,10 @@
                             xhr.open("POST", _settings.processorUrl, true);
                             xhr.setRequestHeader("Method", "POST " + _settings.processorUrl + " HTTP/1.1");
                             xhr.setRequestHeader("Content-Type", "application/json");
-                            xhr.send(JSON.stringify({ "logs" : data }));
+                            xhr.send(JSON.stringify({ 
+                                                        "logs" : data, 
+                                                        "session" : Logger.session.currentContext()  
+                                                    }));
                         } catch(er) {
                             return false;
                         }
@@ -146,7 +153,11 @@
                         if(data.length > 0){
                             /* if the Logger and processor are on 2 different domains, the domains should be absolute, 
                              * making it safe to assume we can pass that to the listener */
-                            listener.postMessage(JSON.stringify({ "logs" : data, "processorUrl" : _settings.processorUrl}), listenerOrigin);
+                            listener.postMessage(JSON.stringify({ 
+                                                                    "logs" : data, 
+                                                                    "processorUrl" : _settings.processorUrl,
+                                                                    "session" : Logger.session.currentContext() 
+                                                                }), listenerOrigin);
                         }
                     }
                 }
@@ -333,7 +344,42 @@
                 listenerUrl : _settings.listenerUrl.toString(),
                 bufferLimit : _settings.bufferLimit.toString()
             };
+        },
+        
+        session : {
+            
+            open : function(sessionName){
+                if(typeof sessionName === 'string'){
+                    var l = _sessions.length,
+                        isUnique = true;
+                    for(var i = 0; i < l; i++){
+                        if(_sessions[i] === sessionName){
+                            isUnique = false;
+                            break;
+                        }
+                    }
+                    if(isUnique){
+                        _sessions.push(sessionName);
+                    }
+                }
+            },
+            
+            end : function(){
+                /* remove the current session */
+                _sessions.pop();
+                /* todo: allow removal of specific sessions */
+            },
+            
+            currentContext : function(){
+                return _sessions[_sessions.length - 1];
+            },
+            
+            currentOpenSessions : function (){
+                return _sessions.join(', ').toString();
+            }
+                
         }
+    
     };
 
 })();
